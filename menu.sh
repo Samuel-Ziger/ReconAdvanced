@@ -1,257 +1,176 @@
 #!/usr/bin/env bash
 
-# Menu principal para seleção de ferramentas de monitoramento avançado
-# Baseado nos subdomínios gerados pelo Dns.sh
-
-set -euo pipefail
-
-# Cores
+# Cores para o menu
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
-# Diretório base
 BUG_BOUNTY_DIR="./"
 
-# Função para exibir banner
-exibir_banner() {
+# Função para verificar se o Dns.sh foi executado
+check_dns_execution() {
+    local found_results=false
+    
+    # Procura por arquivos subs.txt ou resultados de fuzzing
+    find "$BUG_BOUNTY_DIR" -type f -name "subs.txt" 2>/dev/null | head -1 | read -r first_subs
+    find "$BUG_BOUNTY_DIR" -type d -name "fuzzing" 2>/dev/null | head -1 | read -r first_fuzzing
+    
+    if [ -n "$first_subs" ] || [ -n "$first_fuzzing" ]; then
+        found_results=true
+    fi
+    
+    echo "$found_results"
+}
+
+# Função para mostrar o menu
+show_menu() {
     clear
-    echo -e "${CYAN}"
-    echo "╔══════════════════════════════════════════════════════════════════════╗"
-    echo "║                                                                      ║"
-    echo "║          🕷️  MONITORAMENTO AVANÇADO - MENU PRINCIPAL  🚀            ║"
-    echo "║                                                                      ║"
-    echo "╚══════════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-}
-
-# Função para encontrar todos os arquivos subs.txt
-encontrar_subdominios() {
-    local subdominios_encontrados=()
-    
-    while IFS= read -r -d '' subs_file; do
-        subdominios_encontrados+=("$subs_file")
-    done < <(find "$BUG_BOUNTY_DIR" -type f -name "subs.txt" -print0 2>/dev/null)
-    
-    printf '%s\n' "${subdominios_encontrados[@]}"
-}
-
-# Função para exibir menu de seleção de subdomínios
-selecionar_arquivo_subs() {
-    local arquivos=("$@")
-    
-    if [ ${#arquivos[@]} -eq 0 ]; then
-        echo -e "${RED}[!] Nenhum arquivo subs.txt encontrado!${NC}"
-        echo -e "${YELLOW}[*] Execute primeiro o Dns.sh para gerar os subdomínios${NC}"
-        return 1
-    fi
-    
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}Arquivos de subdomínios encontrados:${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║     MENU DE ANÁLISE PÓS-RECONHECIMENTO DNS              ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    
-    local i=1
-    for arquivo in "${arquivos[@]}"; do
-        local dominio_dir=$(dirname "$arquivo")
-        local dominio=$(basename "$dominio_dir")
-        local count=$(wc -l < "$arquivo" 2>/dev/null || echo "0")
-        
-        echo -e "${CYAN}[$i]${NC} $arquivo"
-        echo -e "    ${YELLOW}Domínio:${NC} $dominio | ${YELLOW}Subdomínios:${NC} $count"
-        echo ""
-        i=$((i + 1))
-    done
-    
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}Escolha uma opção:${NC}"
     echo ""
-    echo -e "${GREEN}Selecione o arquivo (1-${#arquivos[@]}) ou 0 para voltar:${NC} "
-    read -r escolha
-    
-    if [ "$escolha" = "0" ]; then
-        return 1
-    fi
-    
-    if [ "$escolha" -ge 1 ] && [ "$escolha" -le ${#arquivos[@]} ]; then
-        local indice=$((escolha - 1))
-        echo "${arquivos[$indice]}"
-        return 0
-    else
-        echo -e "${RED}[!] Opção inválida!${NC}"
-        return 1
-    fi
-}
-
-# Função para executar Port-Hunter
-executar_port_hunter() {
-    local subs_file=$1
-    
-    echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}🕷️  PORT-HUNTER INTELIGENTE${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${YELLOW}1)${NC}  Analisar Endpoints Encontrados (FFUF)"
+    echo -e "  ${YELLOW}2)${NC}  Capturar Screenshots dos URLs"
+    echo -e "  ${YELLOW}3)${NC}  Fingerprinting de Tecnologias"
+    echo -e "  ${YELLOW}4)${NC}  Análise de Headers de Segurança"
+    echo -e "  ${YELLOW}5)${NC}  Teste de Vulnerabilidades Comuns"
+    echo -e "  ${YELLOW}6)${NC}  Análise de Certificados SSL/TLS"
+    echo -e "  ${YELLOW}7)${NC}  Verificar Arquivos Sensíveis Expostos"
+    echo -e "  ${YELLOW}8)${NC}  Análise de JavaScript (Secrets/APIs)"
+    echo -e "  ${YELLOW}9)${NC}  Verificação de CORS"
+    echo -e "  ${YELLOW}10)${NC} Análise de APIs REST"
+    echo -e "  ${YELLOW}11)${NC} Scan de Portas nos Subdomínios"
+    echo -e "  ${YELLOW}12)${NC} Análise de DNS (Registros/Histórico)"
+    echo -e "  ${YELLOW}13)${NC} Gerar Relatório Consolidado"
+    echo -e "  ${YELLOW}14)${NC} Comparar Resultados Entre Execuções"
+    echo -e "  ${YELLOW}15)${NC} Extrair Informações Sensíveis (Regex)"
     echo ""
-    
-    # Criar diretório de saída baseado no arquivo
-    local dominio_dir=$(dirname "$subs_file")
-    local dominio=$(basename "$dominio_dir")
-    local output_dir="${dominio_dir}/port_hunter_results"
-    
-    echo -e "${YELLOW}[*] Arquivo:${NC} $subs_file"
-    echo -e "${YELLOW}[*] Saída:${NC} $output_dir"
+    echo -e "  ${RED}0)${NC}  Sair"
     echo ""
-    
-    # Verificar se Python está instalado
-    if ! command -v python3 &> /dev/null; then
-        echo -e "${RED}[!] Erro: python3 não encontrado!${NC}"
-        read -p "Pressione Enter para continuar..."
-        return 1
-    fi
-    
-    # Verificar se nmap está instalado
-    if ! command -v nmap &> /dev/null; then
-        echo -e "${RED}[!] Erro: nmap não encontrado!${NC}"
-        echo -e "${YELLOW}[*] Instale o nmap primeiro${NC}"
-        read -p "Pressione Enter para continuar..."
-        return 1
-    fi
-    
-    # Executar Port-Hunter
-    python3 port_hunter.py "$subs_file" -o "$output_dir"
-    
-    echo ""
-    echo -e "${GREEN}[✓] Port-Hunter concluído!${NC}"
-    read -p "Pressione Enter para continuar..."
-}
-
-# Função para executar Fuzzer Turbo
-executar_fuzzer_turbo() {
-    local subs_file=$1
-    
-    echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}🚀 FUZZER DE DIRETÓRIOS TURBO${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    
-    # Criar diretório de saída
-    local dominio_dir=$(dirname "$subs_file")
-    local dominio=$(basename "$dominio_dir")
-    local output_dir="${dominio_dir}/fuzzer_results"
-    
-    echo -e "${YELLOW}[*] Arquivo:${NC} $subs_file"
-    echo -e "${YELLOW}[*] Saída:${NC} $output_dir"
-    echo ""
-    
-    # Solicitar wordlist
-    echo -e "${CYAN}Digite o caminho da wordlist (ou Enter para padrão):${NC}"
-    echo -e "${YELLOW}Padrão: /usr/share/wordlists/dirb/common.txt${NC}"
-    read -r wordlist
-    
-    if [ -z "$wordlist" ]; then
-        wordlist="/usr/share/wordlists/dirb/common.txt"
-    fi
-    
-    # Verificar se wordlist existe
-    if [ ! -f "$wordlist" ]; then
-        echo -e "${RED}[!] Wordlist não encontrada: $wordlist${NC}"
-        echo -e "${YELLOW}[*] Você pode baixar wordlists em:${NC}"
-        echo "    - https://github.com/danielmiessler/SecLists"
-        read -p "Pressione Enter para continuar..."
-        return 1
-    fi
-    
-    # Solicitar número de threads
-    echo -e "${CYAN}Número de threads (padrão: 40):${NC}"
-    read -r threads
-    
-    if [ -z "$threads" ]; then
-        threads=40
-    fi
-    
-    # Executar Fuzzer
-    bash fuzzer_turbo.sh "$subs_file" "$wordlist" "$output_dir" "$threads"
-    
-    echo ""
-    echo -e "${GREEN}[✓] Fuzzer Turbo concluído!${NC}"
-    read -p "Pressione Enter para continuar..."
-}
-
-# Função para exibir menu principal
-exibir_menu_principal() {
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}Selecione uma opção:${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${CYAN}[1]${NC} 🕷️  Port-Hunter Inteligente (Nmap + Análise)"
-    echo -e "    Analisa serviços e alerta sobre vulnerabilidades"
-    echo ""
-    echo -e "${CYAN}[2]${NC} 🚀 Fuzzer de Diretórios Turbo (ffuf)"
-    echo -e "    Fuzzing em massa com filtros inteligentes"
-    echo ""
-    echo -e "${CYAN}[3]${NC} 🔄 Executar Dns.sh (Recon DNS)"
-    echo -e "    Gera lista de subdomínios"
-    echo ""
-    echo -e "${CYAN}[0]${NC} Sair"
-    echo ""
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${GREEN}Escolha uma opção:${NC} "
+    echo -n -e "${GREEN}Opção: ${NC}"
 }
 
 # Função principal
 main() {
+    # Verifica se o Dns.sh foi executado
+    if [ "$(check_dns_execution)" = "false" ]; then
+        echo -e "${RED}[!] ERRO: O script Dns.sh precisa ser executado primeiro!${NC}"
+        echo -e "${YELLOW}[*] Execute: ./Dns.sh${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}[+] Resultados do Dns.sh encontrados!${NC}"
+    sleep 1
+    
     while true; do
-        exibir_banner
+        show_menu
+        read -r option
         
-        # Encontrar arquivos de subdomínios
-        mapfile -t arquivos_subs < <(encontrar_subdominios)
-        
-        exibir_menu_principal
-        read -r opcao
-        
-        case $opcao in
+        case $option in
             1)
-                # Port-Hunter
-                exibir_banner
-                arquivo_selecionado=$(selecionar_arquivo_subs "${arquivos_subs[@]}")
-                
-                if [ -n "$arquivo_selecionado" ]; then
-                    executar_port_hunter "$arquivo_selecionado"
-                fi
+                echo -e "\n${BLUE}[*] Executando análise de endpoints...${NC}"
+                ./scripts/analyze_endpoints.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
                 ;;
             2)
-                # Fuzzer Turbo
-                exibir_banner
-                arquivo_selecionado=$(selecionar_arquivo_subs "${arquivos_subs[@]}")
-                
-                if [ -n "$arquivo_selecionado" ]; then
-                    executar_fuzzer_turbo "$arquivo_selecionado"
-                fi
+                echo -e "\n${BLUE}[*] Capturando screenshots...${NC}"
+                ./scripts/screenshot_urls.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
                 ;;
             3)
-                # Executar Dns.sh
-                exibir_banner
-                echo -e "${GREEN}🔄 Executando Dns.sh...${NC}"
-                echo ""
-                bash Dns.sh
-                echo ""
-                echo -e "${GREEN}[✓] Dns.sh concluído!${NC}"
-                read -p "Pressione Enter para continuar..."
+                echo -e "\n${BLUE}[*] Executando fingerprinting...${NC}"
+                ./scripts/tech_fingerprint.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            4)
+                echo -e "\n${BLUE}[*] Analisando headers de segurança...${NC}"
+                ./scripts/security_headers.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            5)
+                echo -e "\n${BLUE}[*] Testando vulnerabilidades...${NC}"
+                ./scripts/vuln_scan.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            6)
+                echo -e "\n${BLUE}[*] Analisando certificados SSL...${NC}"
+                ./scripts/ssl_analysis.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            7)
+                echo -e "\n${BLUE}[*] Verificando arquivos sensíveis...${NC}"
+                ./scripts/sensitive_files.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            8)
+                echo -e "\n${BLUE}[*] Analisando JavaScript...${NC}"
+                ./scripts/js_analysis.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            9)
+                echo -e "\n${BLUE}[*] Verificando CORS...${NC}"
+                ./scripts/cors_check.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            10)
+                echo -e "\n${BLUE}[*] Analisando APIs REST...${NC}"
+                ./scripts/api_analysis.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            11)
+                echo -e "\n${BLUE}[*] Escaneando portas...${NC}"
+                ./scripts/port_scan.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            12)
+                echo -e "\n${BLUE}[*] Analisando DNS...${NC}"
+                ./scripts/dns_analysis.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            13)
+                echo -e "\n${BLUE}[*] Gerando relatório...${NC}"
+                ./scripts/generate_report.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            14)
+                echo -e "\n${BLUE}[*] Comparando resultados...${NC}"
+                ./scripts/compare_results.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
+                ;;
+            15)
+                echo -e "\n${BLUE}[*] Extraindo informações sensíveis...${NC}"
+                ./scripts/extract_secrets.sh
+                echo -e "\n${GREEN}[+] Pressione Enter para continuar...${NC}"
+                read -r
                 ;;
             0)
-                echo -e "${GREEN}Até logo! 👋${NC}"
+                echo -e "\n${GREEN}[+] Saindo...${NC}"
                 exit 0
                 ;;
             *)
-                echo -e "${RED}[!] Opção inválida!${NC}"
+                echo -e "\n${RED}[!] Opção inválida!${NC}"
                 sleep 1
                 ;;
         esac
     done
 }
 
-# Executar menu principal
 main

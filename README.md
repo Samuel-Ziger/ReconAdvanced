@@ -1,193 +1,234 @@
-# 🕷️ Monitoramento Avançado - Ferramentas de Bug Bounty
+# Sistema de Monitoramento Avançado - Bug Bounty
 
-Sistema completo de monitoramento e análise para bug bounty, incluindo recon DNS, análise de portas e fuzzing de diretórios.
+Sistema completo de reconhecimento e análise pós-descoberta para bug bounty.
 
-## 📋 Ferramentas Incluídas
+## 📋 Estrutura
 
-### 1. **Dns.sh** - Recon DNS
-Script que encontra arquivos `domains.txt` e executa `subfinder` para descobrir subdomínios.
-
-### 2. **Port-Hunter Inteligente** 🕷️
-Script Python que:
-- Executa scans Nmap em subdomínios
-- Analisa automaticamente os resultados XML
-- Alerta sobre serviços não-padrão ou versões vulneráveis
-- Filtra ruído e foca em vetores reais de ataque
-
-### 3. **Fuzzer de Diretórios Turbo** 🚀
-Script Shell que:
-- Executa fuzzing em massa com `ffuf`
-- Filtra falsos positivos (404s disfarçados, etc.)
-- Verifica subdomínios vivos automaticamente
-- Otimizado para encontrar painéis admin e arquivos de config
-
-### 4. **Menu Principal** 🎯
-Menu interativo para selecionar e executar as ferramentas baseado nos subdomínios gerados.
-
-## 🚀 Instalação
-
-### Pré-requisitos
-
-```bash
-# Ferramentas necessárias
-- subfinder (go install -v github.com/projectdiscovery/subfinder/v2/subfinder@latest)
-- nmap
-- ffuf (go install github.com/ffuf/ffuf/v2@latest)
-- httpx (go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest) - opcional mas recomendado
-- parallel (GNU parallel)
-- anew
-- Python 3
-- curl
-
-# Wordlists para fuzzing
-- SecLists: https://github.com/danielmiessler/SecLists
-- Ou use: /usr/share/wordlists/dirb/common.txt (Kali Linux)
+```
+.
+├── Dns.sh                    # Script principal de reconhecimento DNS
+├── menu.sh                   # Menu interativo de análise pós-reconhecimento
+├── scripts/                  # Scripts de análise individuais
+│   ├── analyze_endpoints.sh
+│   ├── screenshot_urls.sh
+│   ├── tech_fingerprint.sh
+│   ├── security_headers.sh
+│   ├── vuln_scan.sh
+│   ├── ssl_analysis.sh
+│   ├── sensitive_files.sh
+│   ├── js_analysis.sh
+│   ├── cors_check.sh
+│   ├── api_analysis.sh
+│   ├── port_scan.sh
+│   ├── dns_analysis.sh
+│   ├── generate_report.sh
+│   ├── compare_results.sh
+│   └── extract_secrets.sh
+└── reports/                  # Diretório de resultados (criado automaticamente)
 ```
 
-## 📖 Como Usar
+## 🚀 Como Usar
 
-### Estrutura de Diretórios
+### 1. Preparação
 
-O sistema espera a seguinte estrutura:
+Certifique-se de ter as seguintes ferramentas instaladas:
+
+**Obrigatórias:**
+- `subfinder` - Descoberta de subdomínios
+- `httpx` - Resolução de URLs
+- `ffuf` - Fuzzing de diretórios
+- `parallel` - Execução paralela
+- `anew` - Adiciona apenas novos itens
+
+**Opcionais (dependendo das análises que usar):**
+- `jq` - Processamento JSON
+- `whatweb` / `wappalyzer` - Fingerprinting
+- `gowitness` / `cutycapt` - Screenshots
+- `nmap` / `nc` - Scan de portas
+- `dig` / `host` - Análise DNS
+- `curl` - Requisições HTTP
+
+### 2. Estrutura de Diretórios
+
+Crie a seguinte estrutura:
+
 ```
 ./
-├── domains.txt                    # Lista de domínios (um por linha)
-├── domains/
-│   └── example.com/
-│       └── subs.txt              # Subdomínios gerados pelo Dns.sh
-├── Dns.sh
-├── menu.sh
-├── port_hunter.py
-└── fuzzer_turbo.sh
+├── empresa1/
+│   └── domains.txt          # Lista de domínios (um por linha)
+├── empresa2/
+│   └── domains.txt
+└── ...
 ```
 
-### Passo 1: Preparar domínios
-
-Crie um arquivo `domains.txt` com seus domínios:
+**Exemplo de `domains.txt`:**
 ```
 example.com
 target.com
-another-target.com
 ```
 
-### Passo 2: Executar recon DNS
+### 3. Execução
 
+#### Passo 1: Executar Reconhecimento DNS
 ```bash
-bash Dns.sh
+./Dns.sh
 ```
 
-Isso irá:
-- Procurar todos os arquivos `domains.txt`
-- Para cada domínio, executar `subfinder`
-- Salvar subdomínios em `./domains/<DOMAIN>/subs.txt`
+Este script irá:
+- Descobrir subdomínios usando `subfinder`
+- Salvar resultados em `empresa/domains/dominio/subs.txt`
+- Fazer fuzzing com `ffuf` nos subdomínios válidos
+- Salvar resultados em `empresa/domains/dominio/fuzzing/*.json`
 
-### Passo 3: Usar o Menu Principal
-
+#### Passo 2: Menu de Análise
 ```bash
-bash menu.sh
+./menu.sh
 ```
 
-O menu oferece 3 opções:
-1. **Port-Hunter Inteligente**: Analisa serviços e detecta vulnerabilidades
-2. **Fuzzer Turbo**: Executa fuzzing em massa nos subdomínios
-3. **Executar Dns.sh**: Gera/atualiza lista de subdomínios
+O menu só aparecerá se o `Dns.sh` já foi executado (verifica existência de `subs.txt` ou diretórios `fuzzing`).
 
-### Uso Direto (sem menu)
+## 📊 Funcionalidades do Menu
 
-#### Port-Hunter
-```bash
-python3 port_hunter.py <arquivo_subs.txt> -o <diretorio_saida>
+### 1. Analisar Endpoints Encontrados (FFUF)
+- Extrai e categoriza endpoints dos resultados do FFUF
+- Separa por código de status HTTP
+- Requer: `jq`
+
+### 2. Capturar Screenshots dos URLs
+- Captura screenshots visuais de todos os URLs encontrados
+- Requer: `gowitness` ou `cutycapt`
+
+### 3. Fingerprinting de Tecnologias
+- Identifica tecnologias usadas (CMS, frameworks, etc.)
+- Requer: `whatweb` ou `wappalyzer`
+
+### 4. Análise de Headers de Segurança
+- Verifica presença de headers de segurança importantes
+- Detecta headers ausentes ou mal configurados
+
+### 5. Teste de Vulnerabilidades Comuns
+- Testa SQL Injection básico
+- Testa XSS básico
+- Detecta diretórios listáveis
+- ⚠️ **Aviso:** Testes básicos. Use ferramentas especializadas para análise completa.
+
+### 6. Análise de Certificados SSL/TLS
+- Verifica validade e expiração de certificados
+- Identifica certificados próximos do vencimento
+- Requer: `openssl`
+
+### 7. Verificar Arquivos Sensíveis Expostos
+- Busca arquivos comuns expostos (.env, .git, backups, etc.)
+- Lista arquivos encontrados com tamanho
+
+### 8. Análise de JavaScript (Secrets/APIs)
+- Analisa arquivos JS em busca de secrets
+- Identifica endpoints de API expostos
+- Procura por chaves de API, tokens, etc.
+
+### 9. Verificação de CORS
+- Verifica configurações de CORS
+- Identifica CORS permissivos ou mal configurados
+
+### 10. Análise de APIs REST
+- Identifica endpoints de API
+- Testa métodos HTTP suportados
+- Detecta documentação de API (Swagger, OpenAPI)
+
+### 11. Scan de Portas nos Subdomínios
+- Escaneia portas comuns nos subdomínios
+- Requer: `nmap` ou `netcat`
+
+### 12. Análise de DNS (Registros/Histórico)
+- Coleta registros DNS (A, AAAA, CNAME, MX, TXT, NS)
+- Requer: `dig` ou `host`
+
+### 13. Gerar Relatório Consolidado
+- Gera relatório em Markdown com todos os resultados
+- Inclui estatísticas e resumos
+- Requer: `jq` (para alguns dados)
+
+### 14. Comparar Resultados Entre Execuções
+- Compara resultados atuais com execução anterior
+- Identifica novos subdomínios
+- Identifica subdomínios removidos
+
+### 15. Extrair Informações Sensíveis (Regex)
+- Busca padrões de secrets usando regex
+- Procura por API keys, tokens, senhas, etc.
+- ⚠️ **Aviso:** Pode gerar falsos positivos. Revise manualmente.
+
+## 📁 Estrutura de Resultados
+
+Após executar as análises, os resultados serão salvos em:
+
 ```
-
-Exemplo:
-```bash
-python3 port_hunter.py ./domains/example.com/subs.txt -o ./results
+reports/
+├── endpoints/           # Análise de endpoints
+├── screenshots/         # Screenshots
+├── technologies/        # Fingerprinting
+├── security_headers/    # Headers de segurança
+├── vulnerabilities/     # Vulnerabilidades encontradas
+├── ssl/                 # Análise SSL
+├── sensitive_files/     # Arquivos sensíveis
+├── js_analysis/         # Análise JavaScript
+├── cors/                # Verificação CORS
+├── api_analysis/        # Análise de APIs
+├── ports/               # Scan de portas
+├── dns/                 # Análise DNS
+├── secrets/             # Secrets extraídos
+└── comparison/          # Comparações
 ```
-
-#### Fuzzer Turbo
-```bash
-bash fuzzer_turbo.sh <arquivo_subs.txt> [wordlist] [output_dir] [threads]
-```
-
-Exemplo:
-```bash
-bash fuzzer_turbo.sh ./domains/example.com/subs.txt /usr/share/wordlists/dirb/common.txt ./fuzz_results 40
-```
-
-## 📊 Saídas
-
-### Port-Hunter
-- Arquivos XML do Nmap: `output_dir/<subdomain>.xml`
-- Relatório de alertas: `output_dir/relatorio_alertas.txt`
-
-### Fuzzer Turbo
-- Resultados brutos: `output_dir/<subdomain>_fuzz.txt`
-- Resultados filtrados: `output_dir/<subdomain>_fuzz.txt.filtrado`
-
-## 🔍 Recursos do Port-Hunter
-
-O Port-Hunter detecta automaticamente:
-- ✅ Serviços vulneráveis conhecidos (Tomcat, Jenkins, RDP, VNC, etc.)
-- ✅ Versões antigas de software
-- ✅ Portas não-padrão com serviços interessantes
-- ✅ Serviços remotos expostos (RDP, VNC, Telnet)
-
-## 🚀 Recursos do Fuzzer Turbo
-
-- ✅ Verificação automática de subdomínios vivos
-- ✅ Filtragem inteligente de falsos positivos
-- ✅ Suporte a múltiplos protocolos (HTTP/HTTPS)
-- ✅ Threading configurável para performance
-- ✅ Remoção de duplicatas
 
 ## ⚙️ Configurações
 
-### Port-Hunter
-Edite `port_hunter.py` para personalizar:
-- `PORTS_PADRAO`: Portas consideradas seguras
-- `SERVICOS_VULNERAVEIS`: Serviços que geram alertas
-- `VERSOES_VULNERAVEIS`: Versões antigas que geram alertas
+### Ajustar Wordlist do FFUF
 
-### Fuzzer Turbo
-Parâmetros configuráveis:
-- Threads (padrão: 40)
-- Wordlist personalizada
-- Filtros de tamanho e status code
+Edite `Dns.sh` linha 19:
+```bash
+WORDLIST="/usr/share/wordlists/dirb/common.txt"
+```
+
+### Ajustar Threads/Paralelismo
+
+Edite `Dns.sh` linha 12:
+```bash
+parallel -j 4  # Altere o número de jobs paralelos
+```
+
+## 🔒 Segurança e Ética
+
+⚠️ **IMPORTANTE:** Este sistema é para uso em:
+- Programas de Bug Bounty autorizados
+- Testes de penetração com autorização escrita
+- Ambientes próprios para testes
+
+**NUNCA use em sistemas sem autorização explícita!**
 
 ## 📝 Notas
 
-- O Port-Hunter pode levar tempo dependendo do número de subdomínios
-- O Fuzzer Turbo é otimizado para performance, mas respeite rate limits
-- Sempre verifique permissões antes de executar scans em produção
-- Use responsavelmente e apenas em sistemas que você tem permissão para testar
+- Os scripts são modulares e podem ser executados individualmente
+- Todos os scripts verificam dependências antes de executar
+- Resultados são salvos em formato texto para fácil análise
+- O menu verifica se o `Dns.sh` foi executado antes de permitir análises
 
 ## 🐛 Troubleshooting
 
-### "nmap não encontrado"
-```bash
-# Linux
-sudo apt install nmap
+**Erro: "Dns.sh precisa ser executado primeiro"**
+- Execute `./Dns.sh` antes de usar o menu
+- Certifique-se de que existem arquivos `subs.txt` ou diretórios `fuzzing`
 
-# macOS
-brew install nmap
-```
+**Erro: "comando não encontrado"**
+- Instale as ferramentas necessárias
+- Verifique se estão no PATH do sistema
 
-### "ffuf não encontrado"
-```bash
-go install github.com/ffuf/ffuf/v2@latest
-```
+**Scripts muito lentos**
+- Ajuste o número de threads no `Dns.sh`
+- Use `-j` menor no `parallel` para reduzir carga
 
-### "httpx não encontrado"
-```bash
-go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-```
+## 📚 Referências
 
-### Wordlist não encontrada
-Baixe SecLists:
-```bash
-git clone https://github.com/danielmiessler/SecLists.git
-```
-
-## 📄 Licença
-
-Use responsavelmente. Apenas teste sistemas que você tem permissão para testar.
+- [Subfinder](https://github.com/projectdiscovery/subfinder)
+- [FFUF](https://github.com/ffuf/ffuf)
+- [HTTPx](https://github.com/projectdiscovery/httpx)
+- [Anew](https://github.com/tomnomnom/anew)

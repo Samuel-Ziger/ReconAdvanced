@@ -1,65 +1,257 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-BASE_DIR="./" # Mesmo diretório base do outro script
+# Menu principal para seleção de ferramentas de monitoramento avançado
+# Baseado nos subdomínios gerados pelo Dns.sh
 
-echo "🔍 === BUG BOUNTY CONTROL CENTER === 🔍"
-echo ""
+set -euo pipefail
 
-# 1. Listar as empresas disponíveis baseadas nas pastas
-echo "Selecione o alvo:"
-# Cria um array com os diretórios encontrados
-mapfile -t targets < <(find "$BASE_DIR" -maxdepth 1 -type d -not -path '*/.*' -not -path "$BASE_DIR" | sed 's|^\./||')
+# Cores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m' # No Color
 
-if [ ${#targets[@]} -eq 0 ]; then
-    echo "❌ Nenhuma pasta de alvo encontrada."
-    exit 1
-fi
+# Diretório base
+BUG_BOUNTY_DIR="./"
 
-# Mostra as opções numeradas
-for i in "${!targets[@]}"; do 
-    echo "[$i] ${targets[$i]}"
-done
+# Função para exibir banner
+exibir_banner() {
+    clear
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════════════════════════════╗"
+    echo "║                                                                      ║"
+    echo "║          🕷️  MONITORAMENTO AVANÇADO - MENU PRINCIPAL  🚀            ║"
+    echo "║                                                                      ║"
+    echo "╚══════════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
 
-echo ""
-read -p "Digite o número do alvo: " target_index
+# Função para encontrar todos os arquivos subs.txt
+encontrar_subdominios() {
+    local subdominios_encontrados=()
+    
+    while IFS= read -r -d '' subs_file; do
+        subdominios_encontrados+=("$subs_file")
+    done < <(find "$BUG_BOUNTY_DIR" -type f -name "subs.txt" -print0 2>/dev/null)
+    
+    printf '%s\n' "${subdominios_encontrados[@]}"
+}
 
-# Validação simples
-if [[ -z "${targets[$target_index]}" ]]; then
-    echo "❌ Opção inválida."
-    exit 1
-fi
+# Função para exibir menu de seleção de subdomínios
+selecionar_arquivo_subs() {
+    local arquivos=("$@")
+    
+    if [ ${#arquivos[@]} -eq 0 ]; then
+        echo -e "${RED}[!] Nenhum arquivo subs.txt encontrado!${NC}"
+        echo -e "${YELLOW}[*] Execute primeiro o Dns.sh para gerar os subdomínios${NC}"
+        return 1
+    fi
+    
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}Arquivos de subdomínios encontrados:${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    local i=1
+    for arquivo in "${arquivos[@]}"; do
+        local dominio_dir=$(dirname "$arquivo")
+        local dominio=$(basename "$dominio_dir")
+        local count=$(wc -l < "$arquivo" 2>/dev/null || echo "0")
+        
+        echo -e "${CYAN}[$i]${NC} $arquivo"
+        echo -e "    ${YELLOW}Domínio:${NC} $dominio | ${YELLOW}Subdomínios:${NC} $count"
+        echo ""
+        i=$((i + 1))
+    done
+    
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${GREEN}Selecione o arquivo (1-${#arquivos[@]}) ou 0 para voltar:${NC} "
+    read -r escolha
+    
+    if [ "$escolha" = "0" ]; then
+        return 1
+    fi
+    
+    if [ "$escolha" -ge 1 ] && [ "$escolha" -le ${#arquivos[@]} ]; then
+        local indice=$((escolha - 1))
+        echo "${arquivos[$indice]}"
+        return 0
+    else
+        echo -e "${RED}[!] Opção inválida!${NC}"
+        return 1
+    fi
+}
 
-SELECTED_TARGET="${targets[$target_index]}"
-# Normaliza o caminho removendo ./ duplicados
-TARGET_PATH=$(echo "$BASE_DIR/$SELECTED_TARGET" | sed 's|/\./|/|g' | sed 's|^\./||')
+# Função para executar Port-Hunter
+executar_port_hunter() {
+    local subs_file=$1
+    
+    echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}🕷️  PORT-HUNTER INTELIGENTE${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Criar diretório de saída baseado no arquivo
+    local dominio_dir=$(dirname "$subs_file")
+    local dominio=$(basename "$dominio_dir")
+    local output_dir="${dominio_dir}/port_hunter_results"
+    
+    echo -e "${YELLOW}[*] Arquivo:${NC} $subs_file"
+    echo -e "${YELLOW}[*] Saída:${NC} $output_dir"
+    echo ""
+    
+    # Verificar se Python está instalado
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${RED}[!] Erro: python3 não encontrado!${NC}"
+        read -p "Pressione Enter para continuar..."
+        return 1
+    fi
+    
+    # Verificar se nmap está instalado
+    if ! command -v nmap &> /dev/null; then
+        echo -e "${RED}[!] Erro: nmap não encontrado!${NC}"
+        echo -e "${YELLOW}[*] Instale o nmap primeiro${NC}"
+        read -p "Pressione Enter para continuar..."
+        return 1
+    fi
+    
+    # Executar Port-Hunter
+    python3 port_hunter.py "$subs_file" -o "$output_dir"
+    
+    echo ""
+    echo -e "${GREEN}[✓] Port-Hunter concluído!${NC}"
+    read -p "Pressione Enter para continuar..."
+}
 
-echo ""
-echo "🎯 Alvo selecionado: $SELECTED_TARGET"
-echo "---------------------------------------"
-echo "O que você deseja fazer?"
-echo "[1] 🕷️ Nmap Hunter (Port Scan Inteligente)"
-echo "[2] 🚀 Fuzzer de Diretórios (FFUF/Dirb)"
-echo "[3] 📸 Tirar Screenshots (Aquatone/Witness)"
-echo "[4] 🚪 Sair"
+# Função para executar Fuzzer Turbo
+executar_fuzzer_turbo() {
+    local subs_file=$1
+    
+    echo -e "\n${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}🚀 FUZZER DE DIRETÓRIOS TURBO${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Criar diretório de saída
+    local dominio_dir=$(dirname "$subs_file")
+    local dominio=$(basename "$dominio_dir")
+    local output_dir="${dominio_dir}/fuzzer_results"
+    
+    echo -e "${YELLOW}[*] Arquivo:${NC} $subs_file"
+    echo -e "${YELLOW}[*] Saída:${NC} $output_dir"
+    echo ""
+    
+    # Solicitar wordlist
+    echo -e "${CYAN}Digite o caminho da wordlist (ou Enter para padrão):${NC}"
+    echo -e "${YELLOW}Padrão: /usr/share/wordlists/dirb/common.txt${NC}"
+    read -r wordlist
+    
+    if [ -z "$wordlist" ]; then
+        wordlist="/usr/share/wordlists/dirb/common.txt"
+    fi
+    
+    # Verificar se wordlist existe
+    if [ ! -f "$wordlist" ]; then
+        echo -e "${RED}[!] Wordlist não encontrada: $wordlist${NC}"
+        echo -e "${YELLOW}[*] Você pode baixar wordlists em:${NC}"
+        echo "    - https://github.com/danielmiessler/SecLists"
+        read -p "Pressione Enter para continuar..."
+        return 1
+    fi
+    
+    # Solicitar número de threads
+    echo -e "${CYAN}Número de threads (padrão: 40):${NC}"
+    read -r threads
+    
+    if [ -z "$threads" ]; then
+        threads=40
+    fi
+    
+    # Executar Fuzzer
+    bash fuzzer_turbo.sh "$subs_file" "$wordlist" "$output_dir" "$threads"
+    
+    echo ""
+    echo -e "${GREEN}[✓] Fuzzer Turbo concluído!${NC}"
+    read -p "Pressione Enter para continuar..."
+}
 
-read -p "Escolha uma opção: " action
+# Função para exibir menu principal
+exibir_menu_principal() {
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}Selecione uma opção:${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${CYAN}[1]${NC} 🕷️  Port-Hunter Inteligente (Nmap + Análise)"
+    echo -e "    Analisa serviços e alerta sobre vulnerabilidades"
+    echo ""
+    echo -e "${CYAN}[2]${NC} 🚀 Fuzzer de Diretórios Turbo (ffuf)"
+    echo -e "    Fuzzing em massa com filtros inteligentes"
+    echo ""
+    echo -e "${CYAN}[3]${NC} 🔄 Executar Dns.sh (Recon DNS)"
+    echo -e "    Gera lista de subdomínios"
+    echo ""
+    echo -e "${CYAN}[0]${NC} Sair"
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "${GREEN}Escolha uma opção:${NC} "
+}
 
-case $action in
-    1)
-        echo "Iniciando Nmap Hunter..."
-        # Chama o script do Nmap passando o caminho do alvo como argumento
-        ./modules/nmap_hunter.sh "$TARGET_PATH"
-        ;;
-    2)
-        echo "Iniciando Fuzzer..."
-        ./modules/fuzzer.sh "$TARGET_PATH"
-        ;;
-    3)
-        echo "Iniciando Screenshots..."
-        ./modules/screens.sh "$TARGET_PATH"
-        ;;
-    *)
-        echo "Saindo..."
-        exit 0
-        ;;
-esac
+# Função principal
+main() {
+    while true; do
+        exibir_banner
+        
+        # Encontrar arquivos de subdomínios
+        mapfile -t arquivos_subs < <(encontrar_subdominios)
+        
+        exibir_menu_principal
+        read -r opcao
+        
+        case $opcao in
+            1)
+                # Port-Hunter
+                exibir_banner
+                arquivo_selecionado=$(selecionar_arquivo_subs "${arquivos_subs[@]}")
+                
+                if [ -n "$arquivo_selecionado" ]; then
+                    executar_port_hunter "$arquivo_selecionado"
+                fi
+                ;;
+            2)
+                # Fuzzer Turbo
+                exibir_banner
+                arquivo_selecionado=$(selecionar_arquivo_subs "${arquivos_subs[@]}")
+                
+                if [ -n "$arquivo_selecionado" ]; then
+                    executar_fuzzer_turbo "$arquivo_selecionado"
+                fi
+                ;;
+            3)
+                # Executar Dns.sh
+                exibir_banner
+                echo -e "${GREEN}🔄 Executando Dns.sh...${NC}"
+                echo ""
+                bash Dns.sh
+                echo ""
+                echo -e "${GREEN}[✓] Dns.sh concluído!${NC}"
+                read -p "Pressione Enter para continuar..."
+                ;;
+            0)
+                echo -e "${GREEN}Até logo! 👋${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}[!] Opção inválida!${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# Executar menu principal
+main

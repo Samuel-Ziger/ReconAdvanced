@@ -30,7 +30,8 @@ if [[ -z "${targets[$target_index]}" ]]; then
 fi
 
 SELECTED_TARGET="${targets[$target_index]}"
-TARGET_PATH="$BASE_DIR/$SELECTED_TARGET"
+# Normaliza o caminho removendo ./ duplicados
+TARGET_PATH=$(echo "$BASE_DIR/$SELECTED_TARGET" | sed 's|/\./|/|g' | sed 's|^\./||')
 
 echo ""
 echo "🎯 Alvo selecionado: $SELECTED_TARGET"

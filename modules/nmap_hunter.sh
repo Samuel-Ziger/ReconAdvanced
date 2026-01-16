@@ -2,14 +2,29 @@
 
 # Recebe o caminho do alvo enviado pelo menu
 TARGET_PATH="$1"
-SUBS_FILE="$TARGET_PATH/todos_subdominios.txt" # Ajuste conforme o nome final que seu script 1 gera
+SUBS_FILE="$TARGET_PATH/todos_subdominios.txt"
 NMAP_DIR="$TARGET_PATH/nmap_scans"
 
-if [ ! -f "$SUBS_FILE" ]; then
-    echo "❌ Arquivo de subdomínios não encontrado em: $SUBS_FILE"
+# Procura todos os arquivos subs.txt gerados pelo recon DNS
+SUBS_FILES=$(find "$TARGET_PATH" -type f -name "subs.txt" 2>/dev/null)
+
+if [ -z "$SUBS_FILES" ]; then
+    echo "❌ Nenhum arquivo de subdomínios encontrado em: $TARGET_PATH"
     echo "Rode o script de Recon DNS primeiro."
     exit 1
 fi
+
+# Consolida todos os subs.txt em um único arquivo, removendo duplicatas
+echo "📋 Consolidando subdomínios de todos os domínios..."
+cat $SUBS_FILES | sort -u > "$SUBS_FILE"
+
+TOTAL_SUBS=$(wc -l < "$SUBS_FILE")
+if [ "$TOTAL_SUBS" -eq 0 ]; then
+    echo "❌ Nenhum subdomínio encontrado após consolidação."
+    exit 1
+fi
+
+echo "✅ Consolidados $TOTAL_SUBS subdomínios únicos de $(echo "$SUBS_FILES" | wc -l) arquivos."
 
 mkdir -p "$NMAP_DIR"
 
